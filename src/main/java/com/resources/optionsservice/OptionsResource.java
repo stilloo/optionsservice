@@ -3,11 +3,14 @@ package com.resources.optionsservice;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
+import java.util.ArrayList;
+import java.util.List;
 
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.PathParam;
 import javax.ws.rs.Produces;
+import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 
 import org.apache.http.HttpResponse;
@@ -107,19 +110,33 @@ public class OptionsResource {
      * @throws IOException
      */
     @GET
-    @Path("optionschain/{stock}/{expiration}/{type}")
+    @Path("optionschain/{ticker}/{expiration}")
     @Produces(MediaType.APPLICATION_JSON)
-    public OptionChains getOptionsChain(@PathParam("ticker") String ticker, @PathParam("expiration") String expiration, @PathParam("type") String type) throws IOException {
-    	
+    public List<OptionChains> getOptionsChain(@PathParam("ticker") String ticker, @PathParam("expiration") String expiration, @QueryParam("type") String type) throws IOException {
     	Document doc = Jsoup.connect("http://finance.yahoo.com/q/op?s="+ticker+"&date="+expiration).get();
-    	Elements optionsTable= null;
-    	if("CALL".equalsIgnoreCase(type) ) {
-    		optionsTable = doc.select("div[id=optionsCallsTable]");
+    	List<OptionChains> optionChainsList = new ArrayList<OptionChains>();
+    	if(!"C".equalsIgnoreCase(type) && !"P".equalsIgnoreCase(type)){
+    		//type is not C or P
+    		optionChainsList.add(populateOptionChains(ticker, "C", doc, expiration));
+    		optionChainsList.add(populateOptionChains(ticker, "P", doc, expiration));
     	} else {
-    		optionsTable = doc.select("div[id=optionsPutsTable]");
+    		optionChainsList.add(populateOptionChains(ticker, type, doc, expiration));
     	}
-    	Elements strikeElements= optionsTable.select("a[href^=/q/op?s="+ticker.toUpperCase()+"&strike]");
-    	OptionChains optionChains = new OptionChains();
+    	
+    	
+    	return optionChainsList;
+    }
+
+	private OptionChains populateOptionChains(String ticker, String type, Document doc, String expiration) throws IOException {
+		OptionChains optionChains = new OptionChains();
+		Elements optionsTable = null;
+		if("C".equalsIgnoreCase(type) ) {
+    		optionsTable = doc.select("div[id=optionsCallsTable]");
+    	} else if("P".equalsIgnoreCase(type)){
+    		optionsTable = doc.select("div[id=optionsPutsTable]");
+    	} 
+		Elements strikeElements= optionsTable.select("a[href^=/q/op?s="+ticker.toUpperCase()+"&strike]");
+		optionChains.setType(type);
     	for(int i = 0 ;i < strikeElements.size();i++) {
     		System.out.println(strikeElements.get(i));
     		Element element = strikeElements.get(i);
@@ -129,7 +146,10 @@ public class OptionsResource {
     		optionChain.setPremium(lastPremiumElement.text());
     		optionChains.addOptionChain(optionChain);
     	}
-    	return optionChains;
-    }
+    	
+		return optionChains;
+	}
+    
+ 
    
 }
